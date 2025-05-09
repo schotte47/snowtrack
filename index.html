@@ -1,0 +1,109 @@
+
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <title>SnowTrack Setup</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 1em; background: #f4f4f4; }
+    h1 { color: #005ea2; }
+    label { display: block; margin-top: 1em; font-weight: bold; }
+    input, select, button { width: 100%; padding: 0.5em; margin-top: 0.3em; border-radius: 5px; border: 1px solid #ccc; }
+    button { background: #005ea2; color: white; font-weight: bold; margin-top: 1.5em; }
+    #status { margin-top: 1em; font-style: italic; }
+  </style>
+</head>
+<body>
+  <h1>SnowTrack Enhetsinställningar</h1>
+
+  <label for="deviceName">Enhetsnamn</label>
+  <input type="text" id="deviceName" placeholder="t.ex. Gunnar">
+
+  <label for="group">Välj grupp</label>
+  <select id="group">
+    <option value="">-- välj befintlig eller skapa ny --</option>
+    <option value="Fjällteam">Fjällteam</option>
+    <option value="TeamB">TeamB</option>
+    <option value="TeamX">TeamX</option>
+    <option value="__new__">Skapa ny grupp...</option>
+  </select>
+
+  <div id="newGroupField" style="display:none">
+    <label for="newGroup">Nytt gruppnamn</label>
+    <input type="text" id="newGroup" placeholder="t.ex. NyGrupp">
+  </div>
+
+  <label for="sendInterval">Sändintervall (ms)</label>
+  <input type="number" id="sendInterval" value="10000">
+
+  <label for="logInterval">Loggintervall (ms)</label>
+  <input type="number" id="logInterval" value="5000">
+
+  <label for="visibleGroups">Synliga grupper (komma-separerat)</label>
+  <input type="text" id="visibleGroups" placeholder="t.ex. Fjällteam,TeamB">
+
+  <button onclick="connectAndSend()">Koppla och Spara</button>
+  <div id="status"></div>
+
+  <script>
+    document.getElementById('group').addEventListener('change', function() {
+      document.getElementById('newGroupField').style.display = this.value === '__new__' ? 'block' : 'none';
+    });
+
+    function generateRandomName() {
+      let name = "";
+      for (let i = 0; i < 6; i++) name += Math.floor(Math.random() * 10);
+      return name;
+    }
+
+    window.onload = () => {
+      const input = document.getElementById("deviceName");
+      if (input.value.trim() === "") {
+        input.value = generateRandomName();
+      }
+    };
+
+    async function connectAndSend() {
+      const status = document.getElementById("status");
+      try {
+        status.innerText = "Ansluter till SnowTrack...";
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ namePrefix: 'SnowTrack_' }],
+          optionalServices: ['0000ffe0-0000-1000-8000-00805f9b34fb']
+        });
+
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
+        const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+
+        let selectedGroup = document.getElementById('group').value;
+        if (selectedGroup === '__new__') {
+          selectedGroup = document.getElementById('newGroup').value;
+        }
+
+        let deviceName = document.getElementById('deviceName').value.trim();
+        if (deviceName === "") {
+          deviceName = generateRandomName();
+          document.getElementById('deviceName').value = deviceName;
+        }
+
+        const config = {
+          name: deviceName,
+          group: selectedGroup,
+          send_interval: parseInt(document.getElementById('sendInterval').value),
+          log_interval: parseInt(document.getElementById('logInterval').value),
+          visible_groups: document.getElementById('visibleGroups').value.split(',').map(g => g.trim())
+        };
+
+        const configString = JSON.stringify(config);
+        const encoder = new TextEncoder();
+        await characteristic.writeValue(encoder.encode(configString));
+        status.innerText = "Inställningar skickade!";
+      } catch (err) {
+        status.innerText = "Fel: " + err;
+      }
+    }
+  </script>
+</body>
+</html>
