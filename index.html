@@ -7,14 +7,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
     body { font-family: sans-serif; margin: 1em; background: #f4f4f4; }
-    h1 { color: #005ea2; }
+    h1 { color: #005ea2; text-align: center; }
     label { display: block; margin-top: 1em; font-weight: bold; }
     input, select, button { width: 100%; padding: 0.5em; margin-top: 0.3em; border-radius: 5px; border: 1px solid #ccc; }
     button { background: #005ea2; color: white; font-weight: bold; margin-top: 1.5em; }
     #status { margin-top: 1em; font-style: italic; }
+    #logo { display: block; margin: 0 auto 1em; max-width: 200px; }
   </style>
 </head>
 <body>
+  <img id="logo" src="snowtrack-logo.png" alt="SnowTrack logo">
   <h1>SnowTrack Enhetsinställningar</h1>
 
   <label for="deviceName">Enhetsnamn</label>
@@ -22,10 +24,7 @@
 
   <label for="group">Välj grupp</label>
   <select id="group">
-    <option value="">-- välj befintlig eller skapa ny --</option>
-    <option value="Fjällteam">Fjällteam</option>
-    <option value="TeamB">TeamB</option>
-    <option value="TeamX">TeamX</option>
+    <option value="">-- laddar grupper --</option>
     <option value="__new__">Skapa ny grupp...</option>
   </select>
 
@@ -39,9 +38,6 @@
 
   <label for="logInterval">Loggintervall (ms)</label>
   <input type="number" id="logInterval" value="5000">
-
-  <label for="visibleGroups">Synliga grupper (komma-separerat)</label>
-  <input type="text" id="visibleGroups" placeholder="t.ex. Fjällteam,TeamB">
 
   <button onclick="connectAndSend()">Koppla och Spara</button>
   <div id="status"></div>
@@ -75,9 +71,24 @@
 
         const server = await device.gatt.connect();
         const service = await server.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb');
-        const characteristic = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
+        const rx = await service.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
 
-        let selectedGroup = document.getElementById('group').value;
+        const groupData = await rx.readValue();
+        const groupText = new TextDecoder().decode(groupData);
+        let groups = [];
+        try { groups = JSON.parse(groupText); } catch (e) { groups = []; }
+
+        const groupSelect = document.getElementById('group');
+        groupSelect.innerHTML = '<option value="">-- välj grupp --</option>';
+        groups.forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g;
+          opt.innerText = g;
+          groupSelect.appendChild(opt);
+        });
+        groupSelect.appendChild(new Option("Skapa ny grupp...", "__new__"));
+
+        let selectedGroup = groupSelect.value;
         if (selectedGroup === '__new__') {
           selectedGroup = document.getElementById('newGroup').value;
         }
@@ -93,15 +104,15 @@
           group: selectedGroup,
           send_interval: parseInt(document.getElementById('sendInterval').value),
           log_interval: parseInt(document.getElementById('logInterval').value),
-          visible_groups: document.getElementById('visibleGroups').value.split(',').map(g => g.trim())
+          visible_groups: []
         };
 
         const configString = JSON.stringify(config);
         const encoder = new TextEncoder();
-        await characteristic.writeValue(encoder.encode(configString));
+        await rx.writeValue(encoder.encode(configString));
         status.innerText = "Inställningar skickade!";
       } catch (err) {
-        status.innerText = "Fel: " + err;
+        document.getElementById("status").innerText = "Fel: " + err;
       }
     }
   </script>
